@@ -795,6 +795,37 @@
  {f:"docker rmi image",d:"Remove a downloaded image"},
  {f:"docker build -t name .",d:"Build an image from a Dockerfile in the current directory"},
 ]},
+{cmd:"sysctl",desc:"View and change kernel parameters at runtime",variants:[
+ {f:"sysctl -a",d:"List all currently available kernel parameters and their values"},
+ {f:"sysctl name",d:"Show the current value of a specific kernel parameter"},
+ {f:"sysctl -w name=value",d:"Temporarily set a kernel parameter (lost on reboot)"},
+ {f:"sysctl -p",d:"Reload kernel parameters from /etc/sysctl.conf"},
+ {f:"sysctl net.ipv4.ip_forward=1",d:"Example: enable IP forwarding at runtime"},
+]},
+{cmd:"dmesg",desc:"Print the kernel ring buffer (boot and hardware/driver messages)",variants:[
+ {f:"dmesg",d:"Show all kernel messages since boot"},
+ {f:"dmesg -H",d:"Human-readable output with relative timestamps, auto-paged"},
+ {f:"dmesg -T",d:"Show human-readable real timestamps instead of seconds since boot"},
+ {f:"dmesg -w",d:"Follow new kernel messages live, like tail -f"},
+ {f:"dmesg -l err",d:"Show only messages at error level or worse"},
+ {f:"dmesg | grep -i usb",d:"Filter kernel messages for a keyword, e.g. USB events"},
+]},
+{cmd:"lsmod",desc:"List currently loaded kernel modules",variants:[
+ {f:"lsmod",d:"Show all loaded kernel modules, their size, and what depends on them"},
+ {f:"lsmod | grep name",d:"Check whether a specific module is currently loaded"},
+]},
+{cmd:"modprobe",desc:"Add or remove kernel modules, resolving dependencies automatically",variants:[
+ {f:"modprobe name",d:"Load a kernel module (and any modules it depends on)"},
+ {f:"modprobe -r name",d:"Remove/unload a kernel module"},
+ {f:"modprobe -n -v name",d:"Dry run: show what would be loaded without actually doing it"},
+]},
+{cmd:"insmod",desc:"Insert a single kernel module (no automatic dependency resolution, use modprobe instead when possible)",variants:[
+ {f:"insmod file.ko",d:"Load a kernel module from a specific .ko file"},
+]},
+{cmd:"rmmod",desc:"Remove a kernel module (low-level, prefer modprobe -r)",variants:[
+ {f:"rmmod name",d:"Unload a currently loaded kernel module"},
+ {f:"rmmod -f name",d:"Force removal even if the module appears to be in use"},
+]},
 {cmd:"apt",desc:"Package manager for Debian/Ubuntu systems",variants:[
  {f:"apt update",d:"Refresh the list of available packages and versions"},
  {f:"apt upgrade",d:"Upgrade all installed packages to their latest versions"},
