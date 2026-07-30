@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cmdref // linux command lookup</title>
+<style>
+  :root{
+    --bg: #0b0c0e;
+    --bg-raised: #141517;
+    --bg-raised-2: #1b1c1f;
+    --border: #2a2b2f;
+    --border-soft: #201f22;
+    --amber: #ffb300;
+    --amber-dim: #a8760a;
+    --amber-glow: rgba(255,179,0,0.12);
+    --text: #e9e7e1;
+    --text-dim: #86847c;
+    --text-faint: #55534c;
+    --green: #5fd97a;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse 900px 500px at 50% -10%, var(--amber-glow), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--mono);
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* subtle scanline texture, very low opacity */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    pointer-events:none;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.012) 0px,
+      rgba(255,255,255,0.012) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+    z-index:1;
+  }
+
+  .wrap{
+    max-width:820px;
+    margin:0 auto;
+    padding:48px 20px 100px;
+    position:relative;
+    z-index:2;
+  }
+
+  header{
+    margin-bottom:28px;
+  }
+  .brand{
+    display:flex;
+    align-items:baseline;
+    gap:10px;
+    margin-bottom:6px;
+  }
+  .brand .lb{
+    color:var(--amber);
+    font-weight:700;
+    font-size:20px;
+    letter-spacing:-0.02em;
+  }
+  .brand .lb::before{content:"~/";color:var(--text-faint);}
+  .brand .tagline{
+    color:var(--text-faint);
+    font-size:12px;
+  }
+  .stats{
+    color:var(--text-faint);
+    font-size:12px;
+  }
+  .stats b{color:var(--text-dim);font-weight:600;}
+
+  /* search bar styled like a terminal prompt */
+  .promptbar{
+    position:sticky;
+    top:16px;
+    z-index:10;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background:var(--bg-raised);
+    border:1px solid var(--border);
+    border-radius:10px;
+    padding:14px 16px;
+    box-shadow:0 10px 30px -12px rgba(0,0,0,0.6);
+    margin-bottom:26px;
+  }
+  .promptbar:focus-within{
+    border-color:var(--amber-dim);
+    box-shadow:0 0 0 3px var(--amber-glow), 0 10px 30px -12px rgba(0,0,0,0.6);
+  }
+  .promptbar .glyph{
+    color:var(--amber);
+    font-weight:700;
+    font-size:16px;
+    flex-shrink:0;
+  }
+  .promptbar input{
+    flex:1;
+    background:transparent;
+    border:none;
+    outline:none;
+    color:var(--text);
+    font-family:var(--mono);
+    font-size:16px;
+    caret-color:var(--amber);
+  }
+  .promptbar input::placeholder{color:var(--text-faint);}
+  .clear-btn{
+    background:none;
+    border:none;
+    color:var(--text-faint);
+    cursor:pointer;
+    font-family:var(--mono);
+    font-size:13px;
+    padding:4px 8px;
+    border-radius:6px;
+    display:none;
+  }
+  .clear-btn:hover{color:var(--text-dim);background:var(--bg-raised-2);}
+  .clear-btn.show{display:block;}
+
+  .hint-row{
+    display:flex;
+    justify-content:space-between;
+    color:var(--text-faint);
+    font-size:11px;
+    margin:-16px 0 22px;
+    padding:0 4px;
+  }
+  .hint-row kbd{
+    background:var(--bg-raised-2);
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:1px 5px;
+    font-size:10px;
+    color:var(--text-dim);
+  }
+
+  #results{display:flex;flex-direction:column;gap:14px;}
+
+  .card{
+    background:var(--bg-raised);
+    border:1px solid var(--border);
+    border-radius:10px;
+    overflow:hidden;
+    animation:rise 0.15s ease-out;
+  }
+  @keyframes rise{
+    from{opacity:0;transform:translateY(3px);}
+    to{opacity:1;transform:translateY(0);}
+  }
+  .card-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:14px 16px;
+    border-bottom:1px solid var(--border-soft);
+    background:linear-gradient(180deg, rgba(255,179,0,0.04), transparent);
+  }
+  .card-head .cmd-name{
+    color:var(--amber);
+    font-size:16px;
+    font-weight:700;
+    letter-spacing:-0.01em;
+  }
+  .card-head .cmd-desc{
+    color:var(--text-dim);
+    font-size:12.5px;
+    margin-top:3px;
+  }
+  .card-head .count-badge{
+    color:var(--text-faint);
+    font-size:11px;
+    border:1px solid var(--border);
+    padding:2px 8px;
+    border-radius:20px;
+    flex-shrink:0;
+    white-space:nowrap;
+  }
+
+  .variant{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:10px 16px;
+    border-bottom:1px solid var(--border-soft);
+  }
+  .variant:last-child{border-bottom:none;}
+  .variant:hover{background:rgba(255,255,255,0.015);}
+
+  .variant .flag{
+    color:var(--text);
+    font-size:14px;
+    background:var(--bg-raised-2);
+    border:1px solid var(--border);
+    padding:5px 9px;
+    border-radius:6px;
+    white-space:nowrap;
+    flex-shrink:0;
+    min-width:0;
+  }
+  .variant .flag mark{
+    background:var(--amber-glow);
+    color:var(--amber);
+    border-radius:2px;
+  }
+  .variant .fdesc{
+    color:var(--text-dim);
+    font-size:13px;
+    line-height:1.45;
+    flex:1;
+  }
+  .variant .fdesc mark{
+    background:var(--amber-glow);
+    color:var(--amber);
+    border-radius:2px;
+  }
+
+  .copy-btn{
+    flex-shrink:0;
+    background:var(--bg-raised-2);
+    border:1px solid var(--border);
+    color:var(--text-faint);
+    cursor:pointer;
+    border-radius:6px;
+    width:30px;
+    height:30px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition:border-color .12s, color .12s;
+  }
+  .copy-btn:hover{color:var(--amber);border-color:var(--amber-dim);}
+  .copy-btn.copied{color:var(--green);border-color:var(--green);}
+  .copy-btn svg{width:14px;height:14px;}
+
+  .empty-state{
+    text-align:center;
+    color:var(--text-faint);
+    padding:60px 20px;
+    font-size:13px;
+  }
+  .empty-state .big{
+    font-size:14px;
+    color:var(--text-dim);
+    margin-bottom:6px;
+  }
+
+  footer{
+    text-align:center;
+    color:var(--text-faint);
+    font-size:11px;
+    margin-top:50px;
+  }
+
+  @media (max-width:520px){
+    .wrap{padding:28px 14px 80px;}
+    .variant{flex-wrap:wrap;}
+    .variant .flag{font-size:13px;}
+  }
+
+  ::selection{background:var(--amber-glow);color:var(--amber);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <span class="lb">cmdref</span>
+      <span class="tagline">// offline linux command lookup</span>
+    </div>
+    <div class="stats" id="stats"></div>
+  </header>
+
+  <div class="promptbar">
+    <span class="glyph">$</span>
+    <input id="search" type="text" placeholder="search a command, e.g. ls, ss, grep, chmod..." autocomplete="off" autocapitalize="off" spellcheck="false" autofocus>
+    <button class="clear-btn" id="clearBtn">clear ✕</button>
+  </div>
+  <div class="hint-row">
+    <span>type to filter instantly</span>
+    <span><kbd>Esc</kbd> clear &nbsp; <kbd>click</kbd> copy button to copy a command</span>
+  </div>
+
+  <div id="results"></div>
+  <footer>runs entirely in your browser · no server, no network calls · save this file anywhere</footer>
+</div>
+
+<script>const DATA = [
+{cmd:"ls",desc:"List directory contents",variants:[
+ {f:"ls",d:"List files and folders in the current directory"},
+ {f:"ls -l",d:"Long/detail format: permissions (e.g. rwxr-xr-x), owner, group, size, modified date"},
+ {f:"ls -a",d:"Show all entries, including hidden files (those starting with .)"},
+ {f:"ls -la",d:"Combine long format with hidden files"},
+ {f:"ls -lh",d:"Long format with human-readable sizes (K, M, G instead of bytes)"},
+ {f:"ls -t",d:"Sort by modification time, newest first"},
+ {f:"ls -S",d:"Sort by file size, largest first"},
+ {f:"ls -R",d:"List subdirectories recursively"},
+ {f:"ls -d */",d:"List only directories, not their contents"},
+ {f:"ls -i",d:"Show inode number of each file"},
+]},
+{cmd:"cd",desc:"Change the current working directory",variants:[
+ {f:"cd",d:"Go to your home directory"},
+ {f:"cd -",d:"Go back to the previous directory you were in"},
+ {f:"cd ..",d:"Go up one directory level"},
+ {f:"cd ~",d:"Go to home directory (explicit)"},
+ {f:"cd /",d:"Go to the filesystem root"},
+]},
+{cmd:"cp",desc:"Copy files and directories",variants:[
+ {f:"cp a b",d:"Copy file a to file/location b"},
+ {f:"cp -r a b",d:"Copy directory a recursively into b"},
+ {f:"cp -i a b",d:"Prompt before overwriting an existing file"},
+ {f:"cp -v a b",d:"Verbose: print each file as it's copied"},
+ {f:"cp -u a b",d:"Only copy when source is newer than destination or dest is missing"},
+ {f:"cp -p a b",d:"Preserve mode, ownership and timestamps"},
+]},
+{cmd:"mv",desc:"Move or rename files and directories",variants:[
+ {f:"mv a b",d:"Move/rename a to b"},
+ {f:"mv -i a b",d:"Prompt before overwriting an existing file"},
+ {f:"mv -n a b",d:"Never overwrite an existing file"},
+ {f:"mv -v a b",d:"Verbose: print each move as it happens"},
+]},
+{cmd:"rm",desc:"Remove files or directories",variants:[
+ {f:"rm file",d:"Delete a file"},
+ {f:"rm -r dir",d:"Delete a directory and its contents recursively"},
+ {f:"rm -f file",d:"Force delete, no prompt, ignore nonexistent files"},
+ {f:"rm -rf dir",d:"Force recursive delete, no confirmation (dangerous, no undo)"},
+ {f:"rm -i file",d:"Prompt for confirmation before every removal"},
+]},
+{cmd:"mkdir",desc:"Create directories",variants:[
+ {f:"mkdir dir",d:"Create a new directory"},
+ {f:"mkdir -p a/b/c",d:"Create nested directories, creating parents as needed"},
+ {f:"mkdir -v dir",d:"Verbose: print a message for each created directory"},
+ {f:"mkdir -m 755 dir",d:"Create directory with specific permission mode"},
+]},
+{cmd:"touch",desc:"Create empty files or update timestamps",variants:[
+ {f:"touch file",d:"Create an empty file, or update its modified time if it exists"},
+ {f:"touch -c file",d:"Do not create the file if it doesn't already exist"},
+ {f:"touch -d '2024-01-01' file",d:"Set a specific timestamp instead of now"},
+]},
+{cmd:"find",desc:"Search for files and directories in a directory tree",variants:[
+ {f:"find . -name 'x*'",d:"Find files/dirs under current dir matching a name pattern"},
+ {f:"find . -iname 'x*'",d:"Same as -name but case-insensitive"},
+ {f:"find . -type f",d:"Find only regular files"},
+ {f:"find . -type d",d:"Find only directories"},
+ {f:"find . -mtime -7",d:"Find files modified in the last 7 days"},
+ {f:"find . -size +100M",d:"Find files larger than 100MB"},
+ {f:"find . -name '*.log' -delete",d:"Find matching files and delete them"},
+ {f:"find . -exec chmod 644 {} \\;",d:"Run a command on every file found"},
+ {f:"find / -perm -4000",d:"Find files with the SUID bit set"},
+]},
+{cmd:"locate",desc:"Quickly find files by name using a prebuilt index (faster than find)",variants:[
+ {f:"locate name",d:"Search the file index for paths containing 'name'"},
+ {f:"locate -i name",d:"Case-insensitive search"},
+ {f:"locate -c name",d:"Show only the count of matches"},
+ {f:"updatedb",d:"Rebuild the locate database (run as root)"},
+]},
+{cmd:"du",desc:"Show disk usage of files and directories",variants:[
+ {f:"du -h dir",d:"Human-readable sizes for every subdirectory"},
+ {f:"du -sh dir",d:"Summarized total size only, human-readable"},
+ {f:"du -a dir",d:"Show sizes for files too, not just directories"},
+ {f:"du -h --max-depth=1",d:"Show sizes one level deep only"},
+]},
+{cmd:"df",desc:"Show disk space usage of mounted filesystems",variants:[
+ {f:"df -h",d:"Human-readable sizes (G, M) for all mounted filesystems"},
+ {f:"df -T",d:"Show the filesystem type (ext4, xfs, etc.) as well"},
+ {f:"df -i",d:"Show inode usage instead of block usage"},
+]},
+{cmd:"tar",desc:"Archive files together (optionally with compression)",variants:[
+ {f:"tar -cvf out.tar dir",d:"Create an archive from a directory, verbose output"},
+ {f:"tar -xvf file.tar",d:"Extract an archive, verbose output"},
+ {f:"tar -czvf out.tar.gz dir",d:"Create a gzip-compressed archive"},
+ {f:"tar -xzvf file.tar.gz",d:"Extract a gzip-compressed archive"},
+ {f:"tar -tvf file.tar",d:"List contents of an archive without extracting"},
+ {f:"tar -xzvf file.tar.gz -C dir",d:"Extract into a specific target directory"},
+]},
+{cmd:"chmod",desc:"Change file permissions",variants:[
+ {f:"chmod 755 file",d:"rwxr-xr-x: owner full, group/others read+execute"},
+ {f:"chmod 644 file",d:"rw-r--r--: owner read+write, group/others read only"},
+ {f:"chmod +x file",d:"Add execute permission for all"},
+ {f:"chmod -x file",d:"Remove execute permission for all"},
+ {f:"chmod -R 755 dir",d:"Apply permissions recursively to a directory tree"},
+ {f:"chmod u+x file",d:"Add execute permission for the owner (user) only"},
+]},
+{cmd:"chown",desc:"Change file owner and/or group",variants:[
+ {f:"chown user file",d:"Change the owner of a file"},
+ {f:"chown user:group file",d:"Change both owner and group"},
+ {f:"chown -R user:group dir",d:"Apply ownership change recursively"},
+ {f:"chown :group file",d:"Change only the group, leave owner unchanged"},
+]},
+{cmd:"ln",desc:"Create links between files",variants:[
+ {f:"ln -s target link",d:"Create a symbolic (soft) link"},
+ {f:"ln target link",d:"Create a hard link"},
+ {f:"ln -sf target link",d:"Create a symlink, overwriting if it already exists"},
+]},
+{cmd:"cat",desc:"Print and concatenate file contents",variants:[
+ {f:"cat file",d:"Print the whole file to the terminal"},
+ {f:"cat -n file",d:"Print with line numbers"},
+ {f:"cat a b > c",d:"Concatenate a and b into a new file c"},
+ {f:"cat -A file",d:"Show non-printing characters (tabs as ^I, line ends as $)"},
+]},
+{cmd:"less",desc:"View file contents one screen at a time (scrollable pager)",variants:[
+ {f:"less file",d:"Open a file for scrollable viewing (q to quit)"},
+ {f:"less +F file",d:"Follow mode, like tail -f, but scrollable"},
+ {f:"less -N file",d:"Show line numbers"},
+ {f:"/pattern",d:"Inside less: search forward for a pattern"},
+]},
+{cmd:"head",desc:"Print the first lines of a file",variants:[
+ {f:"head file",d:"Print the first 10 lines by default"},
+ {f:"head -n 20 file",d:"Print the first 20 lines"},
+ {f:"head -c 100 file",d:"Print the first 100 bytes"},
+]},
+{cmd:"tail",desc:"Print the last lines of a file",variants:[
+ {f:"tail file",d:"Print the last 10 lines by default"},
+ {f:"tail -n 50 file",d:"Print the last 50 lines"},
+ {f:"tail -f file",d:"Follow the file live as new lines are appended (e.g. logs)"},
+ {f:"tail -f -n 100 file",d:"Follow the file, starting from the last 100 lines"},
+]},
+{cmd:"grep",desc:"Search text using patterns",variants:[
+ {f:"grep pattern file",d:"Print lines in file matching pattern"},
+ {f:"grep -i pattern file",d:"Case-insensitive search"},
+ {f:"grep -r pattern dir",d:"Search recursively through a directory"},
+ {f:"grep -v pattern file",d:"Invert match: show lines that do NOT match"},
+ {f:"grep -n pattern file",d:"Show line numbers with matches"},
+ {f:"grep -c pattern file",d:"Show only the count of matching lines"},
+ {f:"grep -l pattern *",d:"Show only filenames that contain a match"},
+ {f:"grep -E 'a|b' file",d:"Extended regex, enables patterns like alternation (a|b)"},
+ {f:"grep -w pattern file",d:"Match whole words only"},
+ {f:"grep -A3 -B3 pattern file",d:"Show 3 lines of context after (A) and before (B) each match"},
+]},
+{cmd:"sed",desc:"Stream editor for filtering and transforming text",variants:[
+ {f:"sed 's/old/new/' file",d:"Replace the first occurrence of old with new on each line"},
+ {f:"sed 's/old/new/g' file",d:"Replace ALL occurrences on each line"},
+ {f:"sed -i 's/old/new/g' file",d:"Edit the file in place instead of printing to stdout"},
+ {f:"sed -n '2,4p' file",d:"Print only lines 2 through 4"},
+ {f:"sed '/pattern/d' file",d:"Delete lines matching a pattern"},
+]},
+{cmd:"awk",desc:"Pattern scanning and text processing language",variants:[
+ {f:"awk '{print $1}' file",d:"Print the first whitespace-separated column of each line"},
+ {f:"awk -F, '{print $2}' file",d:"Use comma as the field separator, print 2nd column"},
+ {f:"awk '{print $NF}' file",d:"Print the last column of each line"},
+ {f:"awk '/pattern/{print}' file",d:"Print lines matching a pattern"},
+ {f:"awk '{sum+=$1} END{print sum}'",d:"Sum a column across all lines and print the total"},
+]},
+{cmd:"sort",desc:"Sort lines of text",variants:[
+ {f:"sort file",d:"Sort lines alphabetically"},
+ {f:"sort -r file",d:"Sort in reverse order"},
+ {f:"sort -n file",d:"Sort numerically instead of alphabetically"},
+ {f:"sort -k2 file",d:"Sort by the 2nd whitespace-separated field"},
+ {f:"sort -u file",d:"Sort and remove duplicate lines"},
+ {f:"sort -h file",d:"Sort by human-readable numbers (2K, 1M, 1G)"},
+]},
+{cmd:"uniq",desc:"Filter or report repeated lines (input should be sorted first)",variants:[
+ {f:"uniq file",d:"Remove consecutive duplicate lines"},
+ {f:"uniq -c file",d:"Prefix each line with the count of occurrences"},
+ {f:"uniq -d file",d:"Show only lines that are duplicated"},
+ {f:"sort file | uniq -c | sort -rn",d:"Common combo: count occurrences, show most frequent first"},
+]},
+{cmd:"wc",desc:"Count lines, words, and bytes",variants:[
+ {f:"wc file",d:"Print line count, word count, and byte count"},
+ {f:"wc -l file",d:"Print only the line count"},
+ {f:"wc -w file",d:"Print only the word count"},
+ {f:"wc -c file",d:"Print only the byte count"},
+]},
+{cmd:"cut",desc:"Extract sections/columns from each line of input",variants:[
+ {f:"cut -d, -f1 file",d:"Split by comma, print the 1st field"},
+ {f:"cut -d: -f1 /etc/passwd",d:"Split by colon, print the 1st field (username)"},
+ {f:"cut -c1-5 file",d:"Print only characters 1 through 5 of each line"},
+]},
+{cmd:"tr",desc:"Translate or delete characters",variants:[
+ {f:"tr 'a-z' 'A-Z'",d:"Convert lowercase input to uppercase"},
+ {f:"tr -d 'x'",d:"Delete all occurrences of a character"},
+ {f:"tr -s ' '",d:"Squeeze repeated spaces into a single space"},
+]},
+{cmd:"diff",desc:"Compare files line by line",variants:[
+ {f:"diff a b",d:"Show the differences between two files"},
+ {f:"diff -u a b",d:"Unified diff format (used by patches, git diff style)"},
+ {f:"diff -r dir1 dir2",d:"Recursively compare two directories"},
+]},
+{cmd:"xargs",desc:"Build and run commands from standard input",variants:[
+ {f:"find . -name '*.tmp' | xargs rm",d:"Delete every file found by piping paths into rm"},
+ {f:"xargs -n1 echo",d:"Run the command once per input item"},
+ {f:"xargs -I{} cmd {}",d:"Use {} as a placeholder for each input item in the command"},
+ {f:"find . -print0 | xargs -0 cmd",d:"Use null separators to safely handle filenames with spaces"},
+]},
+{cmd:"tee",desc:"Write output to a file and stdout at the same time",variants:[
+ {f:"cmd | tee file",d:"Show command output on screen AND save it to a file"},
+ {f:"cmd | tee -a file",d:"Append to the file instead of overwriting it"},
+ {f:"echo hi | sudo tee file",d:"Common trick to write to a root-owned file with sudo"},
+]},
+{cmd:"ps",desc:"Show running processes",variants:[
+ {f:"ps aux",d:"Show all running processes for all users, detailed (BSD style)"},
+ {f:"ps -ef",d:"Show all processes, full format (System V style)"},
+ {f:"ps aux --sort=-%mem",d:"Sort processes by memory usage, highest first"},
+ {f:"ps aux --sort=-%cpu",d:"Sort processes by CPU usage, highest first"},
+ {f:"ps aux | grep name",d:"Find a specific process by name"},
+]},
+{cmd:"top",desc:"Live view of running processes and resource usage",variants:[
+ {f:"top",d:"Open live process monitor, updates every few seconds"},
+ {f:"top -u user",d:"Show only processes owned by a specific user"},
+ {f:"press M in top",d:"Inside top: sort processes by memory usage"},
+ {f:"press P in top",d:"Inside top: sort processes by CPU usage"},
+]},
+{cmd:"htop",desc:"Interactive, colorized version of top (may need install)",variants:[
+ {f:"htop",d:"Open the interactive process viewer"},
+ {f:"htop -u user",d:"Show only processes owned by a specific user"},
+ {f:"F6 in htop",d:"Inside htop: choose which column to sort by"},
+]},
+{cmd:"kill",desc:"Send a signal to a process (usually to stop it)",variants:[
+ {f:"kill PID",d:"Send SIGTERM (graceful stop request) to a process ID"},
+ {f:"kill -9 PID",d:"Send SIGKILL: force kill immediately, cannot be ignored"},
+ {f:"kill -l",d:"List all available signal names"},
+ {f:"kill -HUP PID",d:"Send SIGHUP, often used to make a daemon reload its config"},
+]},
+{cmd:"killall",desc:"Kill processes by name instead of PID",variants:[
+ {f:"killall name",d:"Send SIGTERM to all processes matching a name"},
+ {f:"killall -9 name",d:"Force kill all processes matching a name"},
+ {f:"killall -i name",d:"Prompt for confirmation before killing each match"},
+]},
+{cmd:"pkill",desc:"Find and signal processes by name or attribute",variants:[
+ {f:"pkill name",d:"Kill processes matching a name"},
+ {f:"pkill -9 name",d:"Force kill processes matching a name"},
+ {f:"pkill -u user",d:"Kill all processes owned by a specific user"},
+]},
+{cmd:"nohup",desc:"Run a command that keeps running after you log out",variants:[
+ {f:"nohup cmd &",d:"Run a command immune to hangups, in the background"},
+ {f:"nohup cmd > out.log 2>&1 &",d:"Same, redirecting all output to a log file"},
+]},
+{cmd:"jobs",desc:"List background/suspended jobs in the current shell",variants:[
+ {f:"jobs",d:"List jobs running or stopped in this shell session"},
+ {f:"jobs -l",d:"List jobs including their process IDs"},
+]},
+{cmd:"nice",desc:"Run a process with adjusted CPU scheduling priority",variants:[
+ {f:"nice -n 10 cmd",d:"Run with lower priority (higher niceness, 19 is lowest)"},
+ {f:"nice -n -10 cmd",d:"Run with higher priority (needs root for negative values)"},
+ {f:"renice 10 -p PID",d:"Change priority of an already-running process"},
+]},
+{cmd:"ss",desc:"Show socket statistics (modern replacement for netstat)",variants:[
+ {f:"ss -tulpn",d:"Most common combo: TCP+UDP listening sockets with process name/PID and numeric ports"},
+ {f:"ss -tu",d:"Show both TCP and UDP sockets"},
+ {f:"ss -t",d:"Show only TCP sockets"},
+ {f:"ss -u",d:"Show only UDP sockets"},
+ {f:"ss -l",d:"Show only listening sockets"},
+ {f:"ss -p",d:"Show the process/PID using each socket"},
+ {f:"ss -n",d:"Show numeric addresses/ports instead of resolving names"},
+ {f:"ss -a",d:"Show all sockets, listening and established"},
+ {f:"ss -s",d:"Show summary statistics of socket usage"},
+ {f:"ss -o state established",d:"Filter to only established connections"},
+]},
+{cmd:"netstat",desc:"Show network connections, routing tables, and ports (legacy, use ss instead)",variants:[
+ {f:"netstat -tulpn",d:"TCP+UDP listening sockets with process name/PID (netstat equivalent of ss -tulpn)"},
+ {f:"netstat -r",d:"Show the kernel routing table"},
+ {f:"netstat -i",d:"Show network interface statistics"},
+ {f:"netstat -an",d:"Show all connections with numeric addresses"},
+]},
+{cmd:"ip",desc:"Show and manipulate network interfaces, routes, addresses",variants:[
+ {f:"ip a",d:"Show all network interfaces and their IP addresses"},
+ {f:"ip addr show",d:"Same as 'ip a', full form"},
+ {f:"ip route",d:"Show the routing table"},
+ {f:"ip link",d:"Show network interfaces and their state (up/down)"},
+ {f:"ip link set eth0 up",d:"Bring a network interface up"},
+ {f:"ip -s link",d:"Show interface statistics (packets, errors, drops)"},
+]},
+{cmd:"ifconfig",desc:"Legacy tool to show/configure network interfaces (use ip instead)",variants:[
+ {f:"ifconfig",d:"Show all active network interfaces and their IPs"},
+ {f:"ifconfig -a",d:"Show all interfaces, including inactive ones"},
+ {f:"ifconfig eth0 up",d:"Bring a specific interface up"},
+]},
+{cmd:"ping",desc:"Test network connectivity to a host",variants:[
+ {f:"ping host",d:"Send ICMP echo requests continuously until stopped (Ctrl+C)"},
+ {f:"ping -c 4 host",d:"Send only 4 pings then stop"},
+ {f:"ping -i 2 host",d:"Wait 2 seconds between each ping"},
+]},
+{cmd:"curl",desc:"Transfer data to/from a URL, useful for testing APIs",variants:[
+ {f:"curl url",d:"Fetch a URL and print the response body"},
+ {f:"curl -I url",d:"Fetch only the response headers"},
+ {f:"curl -o file url",d:"Save the response to a file"},
+ {f:"curl -L url",d:"Follow redirects"},
+ {f:"curl -X POST -d 'a=1' url",d:"Send a POST request with form data"},
+ {f:"curl -H 'Header: v' url",d:"Send a request with a custom header"},
+ {f:"curl -s url",d:"Silent mode: hide progress meter and errors"},
+]},
+{cmd:"wget",desc:"Download files from the web",variants:[
+ {f:"wget url",d:"Download a file, saving it with its original name"},
+ {f:"wget -O file url",d:"Download and save with a specific filename"},
+ {f:"wget -c url",d:"Resume a partially downloaded file"},
+ {f:"wget -r url",d:"Recursively download a whole site/directory"},
+]},
+{cmd:"dig",desc:"Query DNS name servers",variants:[
+ {f:"dig domain",d:"Look up the A record (IP address) of a domain"},
+ {f:"dig domain MX",d:"Look up mail server records"},
+ {f:"dig +short domain",d:"Show only the short answer, no extra output"},
+ {f:"dig -x IP",d:"Reverse lookup: find the domain name for an IP"},
+]},
+{cmd:"nslookup",desc:"Query DNS servers (older tool, dig is preferred)",variants:[
+ {f:"nslookup domain",d:"Look up the IP address of a domain"},
+ {f:"nslookup IP",d:"Reverse lookup: find the domain name for an IP"},
+]},
+{cmd:"traceroute",desc:"Show the network path (hops) to a destination",variants:[
+ {f:"traceroute host",d:"Show each router hop between you and the destination"},
+ {f:"traceroute -n host",d:"Show numeric IPs instead of resolving hostnames (faster)"},
+]},
+{cmd:"ssh",desc:"Securely log into a remote machine",variants:[
+ {f:"ssh user@host",d:"Connect to a remote host as a specific user"},
+ {f:"ssh -p 2222 user@host",d:"Connect using a non-default port"},
+ {f:"ssh -i key.pem user@host",d:"Connect using a specific private key file"},
+ {f:"ssh -L 8080:localhost:80 user@host",d:"Local port forward: tunnel local port 8080 to remote port 80"},
+ {f:"ssh -v user@host",d:"Verbose mode, useful for debugging connection issues"},
+]},
+{cmd:"scp",desc:"Securely copy files between hosts over SSH",variants:[
+ {f:"scp file user@host:/path",d:"Copy a local file to a remote host"},
+ {f:"scp user@host:/path file",d:"Copy a remote file to your local machine"},
+ {f:"scp -r dir user@host:/path",d:"Copy a directory recursively"},
+ {f:"scp -P 2222 file user@host:/path",d:"Use a non-default SSH port (capital P)"},
+]},
+{cmd:"rsync",desc:"Efficiently sync files/directories, locally or remotely",variants:[
+ {f:"rsync -av src dst",d:"Archive mode (preserve perms/times) with verbose output"},
+ {f:"rsync -avz src user@host:dst",d:"Sync to a remote host with compression enabled"},
+ {f:"rsync -av --delete src dst",d:"Mirror src to dst, deleting files not present in src"},
+ {f:"rsync -avn src dst",d:"Dry run: show what would change without doing it"},
+]},
+{cmd:"systemctl",desc:"Control systemd services",variants:[
+ {f:"systemctl status name",d:"Show whether a service is running and recent log lines"},
+ {f:"systemctl start name",d:"Start a service now"},
+ {f:"systemctl stop name",d:"Stop a service now"},
+ {f:"systemctl restart name",d:"Restart a service"},
+ {f:"systemctl enable name",d:"Make a service start automatically on boot"},
+ {f:"systemctl disable name",d:"Stop a service from starting automatically on boot"},
+ {f:"systemctl list-units --type=service",d:"List all currently loaded services"},
+ {f:"systemctl daemon-reload",d:"Reload systemd config after editing a unit file"},
+]},
+{cmd:"journalctl",desc:"View systemd service and system logs",variants:[
+ {f:"journalctl -u name",d:"Show logs for a specific systemd service"},
+ {f:"journalctl -f",d:"Follow logs live, like tail -f"},
+ {f:"journalctl -xe",d:"Show recent logs with extra explanation, useful after a failure"},
+ {f:"journalctl --since '1 hour ago'",d:"Show logs from a relative time range"},
+ {f:"journalctl -b",d:"Show logs since the last boot only"},
+]},
+{cmd:"crontab",desc:"Schedule recurring commands",variants:[
+ {f:"crontab -e",d:"Edit your current user's cron schedule"},
+ {f:"crontab -l",d:"List your current cron jobs"},
+ {f:"crontab -r",d:"Remove all of your cron jobs"},
+ {f:"* * * * * cmd",d:"Cron syntax: minute hour day month weekday, this runs every minute"},
+]},
+{cmd:"uname",desc:"Print system information",variants:[
+ {f:"uname -a",d:"Print all system info: kernel name, hostname, version, architecture"},
+ {f:"uname -r",d:"Print only the kernel release version"},
+ {f:"uname -m",d:"Print only the machine hardware architecture (x86_64, arm64...)"},
+]},
+{cmd:"uptime",desc:"Show how long the system has been running",variants:[
+ {f:"uptime",d:"Show uptime, number of users, and load averages"},
+ {f:"uptime -p",d:"Show uptime in a friendly readable format"},
+]},
+{cmd:"free",desc:"Show memory (RAM and swap) usage",variants:[
+ {f:"free -h",d:"Human-readable memory usage (M, G instead of bytes)"},
+ {f:"free -m",d:"Show memory usage in megabytes"},
+ {f:"free -s 2",d:"Refresh and print every 2 seconds"},
+]},
+{cmd:"lsof",desc:"List open files, including network sockets, held by processes",variants:[
+ {f:"lsof -i :80",d:"Show which process is using port 80"},
+ {f:"lsof -u user",d:"Show files opened by a specific user"},
+ {f:"lsof -p PID",d:"Show files opened by a specific process ID"},
+ {f:"lsof +D /path",d:"Show which processes have files open under a directory"},
+]},
+{cmd:"strace",desc:"Trace system calls made by a program (debugging tool)",variants:[
+ {f:"strace cmd",d:"Run a command and print every system call it makes"},
+ {f:"strace -p PID",d:"Attach to and trace an already-running process"},
+ {f:"strace -e open cmd",d:"Trace only a specific type of system call, e.g. open"},
+ {f:"strace -c cmd",d:"Summarize counts and time spent per system call instead of a full trace"},
+]},
+{cmd:"mount",desc:"Attach a filesystem to the directory tree",variants:[
+ {f:"mount",d:"List all currently mounted filesystems"},
+ {f:"mount /dev/sdb1 /mnt",d:"Mount a device at a specific mount point"},
+ {f:"mount -o remount,rw /",d:"Remount the root filesystem as read-write"},
+ {f:"umount /mnt",d:"Unmount a filesystem"},
+]},
+{cmd:"useradd",desc:"Create a new user account",variants:[
+ {f:"useradd name",d:"Create a new user with default settings"},
+ {f:"useradd -m name",d:"Create a user and also create their home directory"},
+ {f:"useradd -m -s /bin/bash name",d:"Create a user with home dir and bash as default shell"},
+ {f:"useradd -G group name",d:"Create a user and add them to a supplementary group"},
+]},
+{cmd:"passwd",desc:"Change a user's password",variants:[
+ {f:"passwd",d:"Change your own password"},
+ {f:"passwd user",d:"Change another user's password (needs root)"},
+ {f:"passwd -l user",d:"Lock a user account (disable password login)"},
+ {f:"passwd -u user",d:"Unlock a previously locked user account"},
+]},
+{cmd:"history",desc:"Show your previously run shell commands",variants:[
+ {f:"history",d:"List your recent command history"},
+ {f:"history | grep pattern",d:"Search your command history for a pattern"},
+ {f:"!123",d:"Re-run the command at history line number 123"},
+ {f:"!!",d:"Re-run the last command"},
+ {f:"history -c",d:"Clear your entire command history"},
+]},
+{cmd:"alias",desc:"Create shortcuts for longer commands",variants:[
+ {f:"alias ll='ls -la'",d:"Create a shortcut so typing ll runs ls -la"},
+ {f:"alias",d:"List all currently defined aliases"},
+ {f:"unalias ll",d:"Remove an alias"},
+]},
+{cmd:"man",desc:"Show the manual page for a command",variants:[
+ {f:"man cmd",d:"Open the full manual page for a command"},
+ {f:"man -k keyword",d:"Search manual page names/descriptions for a keyword"},
+ {f:"man 5 cmd",d:"Open a specific manual section (5 = file formats, etc.)"},
+]},
+{cmd:"sudo",desc:"Run a command as another user, usually root",variants:[
+ {f:"sudo cmd",d:"Run a command with root privileges"},
+ {f:"sudo -i",d:"Start an interactive root shell"},
+ {f:"sudo -u user cmd",d:"Run a command as a specific user, not necessarily root"},
+ {f:"sudo -l",d:"List the commands you're allowed to run with sudo"},
+]},
+{cmd:"su",desc:"Switch to another user in the current session",variants:[
+ {f:"su",d:"Switch to root (needs root password)"},
+ {f:"su - user",d:"Switch to another user with a full login shell/environment"},
+ {f:"su -c 'cmd' user",d:"Run a single command as another user"},
+]},
+{cmd:"whoami",desc:"Print the current effective username",variants:[
+ {f:"whoami",d:"Print the username you are currently logged in as"},
+]},
+{cmd:"id",desc:"Print user and group IDs",variants:[
+ {f:"id",d:"Show your current UID, GID, and group memberships"},
+ {f:"id user",d:"Show UID/GID info for a specific user"},
+ {f:"id -u",d:"Print only the numeric UID"},
+]},
+{cmd:"df",desc:"Show disk space usage",variants:[
+ {f:"df -h",d:"Human-readable disk space for all mounted filesystems"},
+]},
+{cmd:"env",desc:"Show or set environment variables",variants:[
+ {f:"env",d:"List all current environment variables"},
+ {f:"env VAR=val cmd",d:"Run a command with a temporary environment variable set"},
+]},
+{cmd:"export",desc:"Set an environment variable for the current shell and its children",variants:[
+ {f:"export VAR=value",d:"Set an environment variable available to child processes"},
+ {f:"export PATH=$PATH:/new/dir",d:"Add a directory to your PATH"},
+]},
+{cmd:"echo",desc:"Print text to the terminal",variants:[
+ {f:"echo text",d:"Print text followed by a newline"},
+ {f:"echo -n text",d:"Print text without a trailing newline"},
+ {f:"echo $VAR",d:"Print the value of an environment variable"},
+]},
+{cmd:"watch",desc:"Repeatedly run a command and show its output live",variants:[
+ {f:"watch cmd",d:"Run a command every 2 seconds and show the output, refreshing"},
+ {f:"watch -n 5 cmd",d:"Run the command every 5 seconds instead of the default 2"},
+ {f:"watch -d cmd",d:"Highlight differences between successive outputs"},
+]},
+{cmd:"screen",desc:"Terminal multiplexer: run sessions that persist after disconnect",variants:[
+ {f:"screen",d:"Start a new screen session"},
+ {f:"screen -S name",d:"Start a new named session"},
+ {f:"screen -ls",d:"List active screen sessions"},
+ {f:"screen -r name",d:"Reattach to a detached session"},
+ {f:"Ctrl+a d",d:"Detach from the current screen session (keeps running)"},
+]},
+{cmd:"tmux",desc:"Modern terminal multiplexer, alternative to screen",variants:[
+ {f:"tmux",d:"Start a new tmux session"},
+ {f:"tmux new -s name",d:"Start a new named session"},
+ {f:"tmux ls",d:"List active tmux sessions"},
+ {f:"tmux attach -t name",d:"Reattach to a named session"},
+ {f:"Ctrl+b d",d:"Detach from the current tmux session (keeps running)"},
+]},
+{cmd:"git",desc:"Version control system",variants:[
+ {f:"git status",d:"Show changed files and current branch state"},
+ {f:"git add .",d:"Stage all changed files for the next commit"},
+ {f:"git commit -m 'msg'",d:"Commit staged changes with a message"},
+ {f:"git push",d:"Push local commits to the remote repository"},
+ {f:"git pull",d:"Fetch and merge changes from the remote repository"},
+ {f:"git log --oneline",d:"Show commit history, one line per commit"},
+ {f:"git checkout -b name",d:"Create and switch to a new branch"},
+ {f:"git diff",d:"Show unstaged changes compared to the last commit"},
+ {f:"git stash",d:"Temporarily shelve uncommitted changes"},
+ {f:"git reset --hard HEAD",d:"Discard all local changes, back to last commit (destructive)"},
+]},
+{cmd:"docker",desc:"Build and run containers",variants:[
+ {f:"docker ps",d:"List running containers"},
+ {f:"docker ps -a",d:"List all containers, including stopped ones"},
+ {f:"docker images",d:"List downloaded images"},
+ {f:"docker run -it image",d:"Run a container interactively with a terminal"},
+ {f:"docker run -d -p 8080:80 image",d:"Run detached in background, mapping host port to container port"},
+ {f:"docker exec -it container bash",d:"Open a shell inside a running container"},
+ {f:"docker logs -f container",d:"Follow the logs of a container live"},
+ {f:"docker stop container",d:"Stop a running container"},
+ {f:"docker rm container",d:"Remove a stopped container"},
+ {f:"docker rmi image",d:"Remove a downloaded image"},
+ {f:"docker build -t name .",d:"Build an image from a Dockerfile in the current directory"},
+]},
+{cmd:"apt",desc:"Package manager for Debian/Ubuntu systems",variants:[
+ {f:"apt update",d:"Refresh the list of available packages and versions"},
+ {f:"apt upgrade",d:"Upgrade all installed packages to their latest versions"},
+ {f:"apt install pkg",d:"Install a package"},
+ {f:"apt remove pkg",d:"Remove a package but keep its config files"},
+ {f:"apt purge pkg",d:"Remove a package and its config files"},
+ {f:"apt search term",d:"Search for a package by name/description"},
+ {f:"apt list --installed",d:"List all installed packages"},
+]},
+{cmd:"yum",desc:"Package manager for older RHEL/CentOS systems (see dnf)",variants:[
+ {f:"yum install pkg",d:"Install a package"},
+ {f:"yum remove pkg",d:"Remove a package"},
+ {f:"yum update",d:"Update all installed packages"},
+ {f:"yum search term",d:"Search for a package"},
+]},
+{cmd:"dnf",desc:"Package manager for modern Fedora/RHEL systems",variants:[
+ {f:"dnf install pkg",d:"Install a package"},
+ {f:"dnf remove pkg",d:"Remove a package"},
+ {f:"dnf upgrade",d:"Upgrade all installed packages"},
+ {f:"dnf search term",d:"Search for a package"},
+]},
+{cmd:"vim",desc:"Terminal text editor",variants:[
+ {f:"vim file",d:"Open a file for editing"},
+ {f:":w",d:"Save the file (write)"},
+ {f:":q",d:"Quit vim"},
+ {f:":wq",d:"Save and quit"},
+ {f:":q!",d:"Quit without saving changes"},
+ {f:"i",d:"Enter insert mode to start typing"},
+ {f:"Esc",d:"Exit insert mode back to normal mode"},
+ {f:"/pattern",d:"Search forward for a pattern"},
+ {f:"dd",d:"Delete (cut) the current line"},
+]},
+{cmd:"which",desc:"Show the full path of a command's executable",variants:[
+ {f:"which cmd",d:"Print the path to the executable that would run for this command"},
+ {f:"which -a cmd",d:"Show all matching executables found in PATH, not just the first"},
+]},
+{cmd:"whereis",desc:"Locate the binary, source, and manual page for a command",variants:[
+ {f:"whereis cmd",d:"Show binary, source, and man page locations for a command"},
+]},
+{cmd:"date",desc:"Print or set the system date and time",variants:[
+ {f:"date",d:"Print the current date and time"},
+ {f:"date +%Y-%m-%d",d:"Print the date in a custom format (YYYY-MM-DD)"},
+ {f:"date -d 'yesterday'",d:"Print a relative date"},
+ {f:"date -u",d:"Print the current UTC time"},
+]},
+{cmd:"hostname",desc:"Show or set the system's hostname",variants:[
+ {f:"hostname",d:"Print the current hostname"},
+ {f:"hostname -I",d:"Print all IP addresses assigned to this machine"},
+]},
+{cmd:"chgrp",desc:"Change the group ownership of a file",variants:[
+ {f:"chgrp group file",d:"Change the group that owns a file"},
+ {f:"chgrp -R group dir",d:"Change group ownership recursively"},
+]},
+{cmd:"gzip",desc:"Compress files using gzip",variants:[
+ {f:"gzip file",d:"Compress a file to file.gz (removes original)"},
+ {f:"gunzip file.gz",d:"Decompress a .gz file"},
+ {f:"gzip -k file",d:"Compress but keep the original file too"},
+ {f:"gzip -d file.gz",d:"Decompress (same as gunzip)"},
+]},
+{cmd:"zip",desc:"Compress files into a .zip archive",variants:[
+ {f:"zip out.zip file",d:"Create a zip archive containing a file"},
+ {f:"zip -r out.zip dir",d:"Zip a directory recursively"},
+ {f:"unzip file.zip",d:"Extract a zip archive"},
+ {f:"unzip -l file.zip",d:"List contents of a zip without extracting"},
+]},
+];</script>
+<script>(function(){
+  const searchEl = document.getElementById('search');
+  const resultsEl = document.getElementById('results');
+  const statsEl = document.getElementById('stats');
+  const clearBtn = document.getElementById('clearBtn');
+
+  const totalCmds = DATA.length;
+  const totalFlags = DATA.reduce((n,c)=>n+c.variants.length,0);
+  statsEl.textContent = totalCmds + ' commands · ' + totalFlags + ' flag references — all baked in, works offline';
+
+  const copyIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+  const checkIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+  function escapeHtml(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function highlight(text, q){
+    const safe = escapeHtml(text);
+    if(!q) return safe;
+    const idx = text.toLowerCase().indexOf(q.toLowerCase());
+    if(idx === -1) return safe;
+    const before = escapeHtml(text.slice(0, idx));
+    const match = escapeHtml(text.slice(idx, idx+q.length));
+    const after = escapeHtml(text.slice(idx+q.length));
+    return before + '<mark>' + match + '</mark>' + after;
+  }
+
+  // Precompute lowercase fields once for speed.
+  DATA.forEach(c=>{
+    c._cmdLower = c.cmd.toLowerCase();
+    c._descLower = c.desc.toLowerCase();
+    c.variants.forEach(v=>{ v._flagLower = v.f.toLowerCase(); v._dLower = v.d.toLowerCase(); });
+  });
+
+  function score(cmd, q){
+    // Lower is better. Returns null if no match at all.
+    if(!q) return 0;
+    if(cmd._cmdLower === q) return 0;
+    if(cmd._cmdLower.startsWith(q)) return 1;
+    if(cmd._cmdLower.includes(q)) return 2;
+    // check variants for flag match (e.g. "-tulpn" or "tulpn")
+    for(const v of cmd.variants){
+      if(v._flagLower.includes(q)) return 3;
+    }
+    // Description matching only kicks in for queries specific enough
+    // to avoid short substrings (e.g. "ss") flooding results with
+    // unrelated words like "process" or "class".
+    if(q.length < 3) return null;
+    if(cmd._descLower.includes(q)) return 4;
+    for(const v of cmd.variants){
+      if(v._dLower.includes(q)) return 5;
+    }
+    return null;
+  }
+
+  function render(query){
+    const q = query.trim().toLowerCase();
+    clearBtn.classList.toggle('show', q.length > 0);
+
+    let list;
+    if(!q){
+      list = DATA.map(c=>({c, s:0}));
+    } else {
+      list = [];
+      for(const c of DATA){
+        const s = score(c, q);
+        if(s !== null) list.push({c, s});
+      }
+      list.sort((a,b)=> a.s - b.s || a.c.cmd.localeCompare(b.c.cmd));
+    }
+
+    if(list.length === 0){
+      resultsEl.innerHTML = '<div class="empty-state"><div class="big">no matches for "'+escapeHtml(query)+'"</div>try a shorter or different keyword</div>';
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    for(const {c} of list){
+      const card = document.createElement('div');
+      card.className = 'card';
+
+      const head = document.createElement('div');
+      head.className = 'card-head';
+      head.innerHTML =
+        '<div><div class="cmd-name">'+highlight(c.cmd, q)+'</div><div class="cmd-desc">'+highlight(c.desc, q)+'</div></div>'+
+        '<div class="count-badge">'+c.variants.length+' variant'+(c.variants.length>1?'s':'')+'</div>';
+      card.appendChild(head);
+
+      for(const v of c.variants){
+        const row = document.createElement('div');
+        row.className = 'variant';
+        row.innerHTML =
+          '<code class="flag">'+highlight(v.f, q)+'</code>'+
+          '<span class="fdesc">'+highlight(v.d, q)+'</span>'+
+          '<button class="copy-btn" type="button" aria-label="Copy '+escapeHtml(v.f)+'">'+copyIcon+'</button>';
+        const btn = row.querySelector('.copy-btn');
+        btn.addEventListener('click', ()=> doCopy(btn, v.f));
+        card.appendChild(row);
+      }
+
+      frag.appendChild(card);
+    }
+    resultsEl.innerHTML = '';
+    resultsEl.appendChild(frag);
+  }
+
+  function doCopy(btn, text){
+    const reset = ()=>{
+      btn.classList.remove('copied');
+      btn.innerHTML = copyIcon;
+    };
+    const success = ()=>{
+      btn.classList.add('copied');
+      btn.innerHTML = checkIcon;
+      setTimeout(reset, 1100);
+    };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(success).catch(()=>fallbackCopy(text, success));
+    } else {
+      fallbackCopy(text, success);
+    }
+  }
+
+  function fallbackCopy(text, success){
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try{ document.execCommand('copy'); success(); }catch(e){}
+    document.body.removeChild(ta);
+  }
+
+  let raf = null;
+  searchEl.addEventListener('input', ()=>{
+    if(raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(()=> render(searchEl.value));
+  });
+
+  clearBtn.addEventListener('click', ()=>{
+    searchEl.value = '';
+    searchEl.focus();
+    render('');
+  });
+
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape'){
+      searchEl.value = '';
+      render('');
+      searchEl.blur();
+    } else if(e.key === '/' && document.activeElement !== searchEl){
+      e.preventDefault();
+      searchEl.focus();
+    }
+  });
+
+  render('');
+})();</script>
+</body>
+</html>
